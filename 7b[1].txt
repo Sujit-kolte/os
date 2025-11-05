@@ -1,0 +1,46 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/shm.h>
+
+int main() {
+    int shm_id;
+    int *shared_data;
+    int value;
+    int pid;
+
+    // 1️⃣ Create shared memory (size = int)
+    shm_id = shmget(IPC_PRIVATE, sizeof(int), IPC_CREAT | 0666);
+    if (shm_id < 0) {
+        printf("Failed to create shared memory!\n");
+        exit(1);
+    }
+
+    // 2️⃣ Attach shared memory
+    shared_data = (int*) shmat(shm_id, NULL, 0);
+    if (shared_data == (int*) -1) {
+        printf("Attach failed!\n");
+        exit(1);
+    }
+
+    // 3️⃣ Get input from user
+    printf("Enter a number: ");
+    scanf("%d", &value);
+    *shared_data = value; // store it in shared memory
+
+    // 4️⃣ Create a child process
+    pid = fork();
+
+    if (pid == 0) {
+        // 👶 Child process
+        printf("\nChild reads number from shared memory: %d\n", *shared_data);
+        shmdt(shared_data);
+    } else {
+        // 👨 Parent process
+        shmdt(shared_data);
+        shmctl(shm_id, IPC_RMID, NULL); // delete shared memory
+    }
+
+    return 0;
+}
+
