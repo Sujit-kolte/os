@@ -1,0 +1,70 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <unistd.h>       // for sleep()
+#include <sys/types.h>    // for pid_t
+#include <sys/syscall.h>  // for syscall() and SYS_gettid
+
+void *producer();
+void *consumer();
+
+typedef struct {
+    int buff[20];
+    sem_t full, empty;
+} shared;
+
+shared sh;
+int item;
+int in = 0, out = 0;
+sem_t mutex;
+
+int main() {
+    pthread_t ptid1, ptid2, ctid1;
+
+    sem_init(&sh.empty, 0, 20);
+    sem_init(&sh.full, 0, 0);
+    sem_init(&mutex, 0, 1);
+
+    pthread_create(&ptid1, NULL, producer, NULL);
+    pthread_create(&ptid2, NULL, producer, NULL);
+    pthread_create(&ctid1, NULL, consumer, NULL);
+
+    pthread_join(ptid1, NULL);
+    pthread_join(ctid1, NULL);
+    pthread_join(ptid2, NULL);
+
+    return 0;
+}
+
+void *producer() {
+    while (1) {
+        item = in;
+        sem_wait(&sh.empty);
+        sem_wait(&mutex);
+
+        sh.buff[in++ % 20] = item;
+        printf("\nProducer thread id: %ld | Produced item: %d\n",
+               syscall(SYS_gettid), item);
+
+        sem_post(&mutex);
+        sem_post(&sh.full);
+        sleep(2);
+    }
+}
+
+void *consumer() {
+    while (1) {
+        sem_wait(&sh.full);
+        sem_wait(&mutex);
+
+        item = sh.buff[out++ % 20];
+        printf("\nConsumer thread id: %ld | Consumed item: %d\n",
+               syscall(SYS_gettid), item);
+
+        sem_post(&mutex);
+        sem_post(&sh.empty);
+        sleep(2);
+    }
+}
+
