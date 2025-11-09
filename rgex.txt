@@ -1,0 +1,41 @@
+// 1. Create/use database
+use myDatabase
+
+// 2. Create collection and insert documents
+db.users.insertMany([
+  { name: "Alice Johnson", email: "alice@example.com", age: 25, city: "New York" },
+  { name: "Bob Smith", email: "bob@example.com", age: 30, city: "Los Angeles" },
+  { name: "Charlie Brown", email: "charlie@example.com", age: 28, city: "Chicago" },
+  { name: "David Allen", email: "david@example.com", age: 35, city: "Newark" },
+  { name: "Eve Adams", email: "eve@example.com", age: 22, city: "New Orleans" }
+])
+
+// 3. Find all documents
+db.users.find()
+
+// 4. Regex queries
+
+// 4.1 Find names containing "Alice"
+db.users.find({ name: { $regex: /Alice/ } })
+
+// 4.2 Case-insensitive search for names containing "bob"
+db.users.find({ name: { $regex: /bob/i } })
+
+// 4.3 Names starting with "C"
+db.users.find({ name: { $regex: /^C/ } })
+
+// 4.4 Names ending with "son"
+db.users.find({ name: { $regex: /son$/ } })
+
+// 4.5 Exact word match "David"
+db.users.find({ name: { $regex: /\bDavid\b/ } })
+
+// 4.6 Names containing "Alice" or "Eve"
+db.users.find({ name: { $regex: /Alice|Eve/ } })
+
+// 4.7 Names with any character between "A" and "c" (like "A_c")
+db.users.find({ name: { $regex: /A.c/ } })
+
+// 4.8 Names starting with "D" (case-insensitive) and age > 30
+db.users.find({ name: { $regex: /^D/, $options: "i" }, age: { $gt: 30 } })
+
