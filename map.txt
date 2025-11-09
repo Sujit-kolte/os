@@ -1,0 +1,29 @@
+// 1. Insert sample data into 'orders' collection
+db.orders.insertMany([
+  { item: "apple", quantity: 5 },
+  { item: "banana", quantity: 10 },
+  { item: "apple", quantity: 15 },
+  { item: "banana", quantity: 5 },
+  { item: "orange", quantity: 8 }
+]);
+
+// 2. Define the Map function
+var mapFunction = function() {
+    emit(this.item, this.quantity);
+};
+
+// 3. Define the Reduce function
+var reduceFunction = function(key, values) {
+    return Array.sum(values);
+};
+
+// 4. Execute MapReduce and store results in 'order_totals' collection
+db.orders.mapReduce(
+    mapFunction,
+    reduceFunction,
+    { out: "order_totals" }
+);
+
+// 5. View the MapReduce results
+db.order_totals.find();
+
