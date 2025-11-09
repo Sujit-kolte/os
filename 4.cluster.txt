@@ -1,0 +1,277 @@
+# ------------------------------
+# Mall Customers - Clustering Assignment
+# Copy-paste this whole block into a Jupyter Notebook cell and run.
+# ------------------------------
+
+# Step 0: imports
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.cluster import KMeans, AgglomerativeClustering
+from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score
+from sklearn.model_selection import KFold
+
+sns.set(style="whitegrid")
+
+# ------------------------------
+# Step 1: Load dataset
+# ------------------------------
+# Change path if needed (typical filename from Kaggle is 'Mall_Customers.csv')
+df = pd.read_csv("Mall_Customers.csv")
+print("Loaded dataset shape:", df.shape)
+display(df.head())
+
+# ------------------------------
+# Step 2: Quick data checks & preprocessing
+# ------------------------------
+# Clean column names (strip spaces)
+df.columns = df.columns.str.strip()
+
+# Show info and missing values
+print("\nInfo:")
+display(df.info())
+print("\nMissing values per column:")
+print(df.isnull().sum())
+
+# Encode Gender if needed
+if 'Gender' in df.columns and df['Gender'].dtype == object:
+    le = LabelEncoder()
+    df['Gender_enc'] = le.fit_transform(df['Gender'])
+    print("\nGender mapping:", dict(zip(le.classes_, le.transform(le.classes_))))
+
+# ------------------------------
+# Step 3: Feature selection
+# We'll use:
+#  - Spending Score (mandatory, as the task emphasizes Spending Score)
+#  - Annual Income (to find 'profitable' customers: high income + high spending)
+# ------------------------------
+features_1d = ['Spending Score (1-100)']   # 1D clustering on spending score
+features_2d = ['Annual Income (k$)', 'Spending Score (1-100)']  # 2D clustering
+
+# Check that those columns exist
+print("\nColumns present:", df.columns.tolist())
+
+# ------------------------------
+# Step 4: Prepare data arrays
+# ------------------------------
+X_spend = df[features_1d].values.reshape(-1, 1)           # 1D array
+X_income_spend = df[features_2d].values                  # 2D array
+
+# Standardize the 2D features for distance-based algorithms
+scaler_2d = StandardScaler()
+X_income_spend_scaled = scaler_2d.fit_transform(X_income_spend)
+
+# For 1D we can scale as well (helps certain metrics)
+from sklearn.preprocessing import StandardScaler
+scaler_1d = StandardScaler()
+X_spend_scaled = scaler_1d.fit_transform(X_spend)
+
+# ------------------------------
+# Utility: function to evaluate and print cluster metrics
+# ------------------------------
+def evaluate_clusters(X, labels, name="Model"):
+    n_clusters = len(np.unique(labels))
+    if n_clusters <= 1:
+        print(f"{name}: Only {n_clusters} cluster found -> cannot compute silhouette.")
+        return {}
+    sil = silhouette_score(X, labels)
+    db = davies_bouldin_score(X, labels)
+    ch = calinski_harabasz_score(X, labels)
+    print(f"{name} -> clusters: {n_clusters}, Silhouette: {sil:.4f}, Davies-Bouldin: {db:.4f}, Calinski-Harabasz: {ch:.2f}")
+    return {'n_clusters': n_clusters, 'silhouette': sil, 'davies_bouldin': db, 'calinski_harabasz': ch}
+
+# ------------------------------
+# Step 5: K-Means on Spending Score (1D) - try k=2..8 and plot Elbow + silhouette
+# ------------------------------
+inertia = []
+sil_scores = []
+K = range(2,9)
+
+for k in K:
+    kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+    labels = kmeans.fit_predict(X_spend_scaled)
+    inertia.append(kmeans.inertia_)
+    sil_scores.append(silhouette_score(X_spend_scaled, labels))
+
+plt.figure(figsize=(12,4))
+plt.subplot(1,2,1)
+plt.plot(list(K), inertia, 'o-')
+plt.xlabel('k (clusters)')
+plt.ylabel('Inertia')
+plt.title('Elbow Method (Spending Score - scaled)')
+
+plt.subplot(1,2,2)
+plt.plot(list(K), sil_scores, 'o-')
+plt.xlabel('k (clusters)')
+plt.ylabel('Silhouette Score')
+plt.title('Silhouette (Spending Score - scaled)')
+plt.tight_layout()
+plt.show()
+
+# Choose k_spend based on elbow & silhouette - often 3 or 4 for mall data, we pick k_spend=4 as example
+k_spend = 4
+kmeans_spend = KMeans(n_clusters=k_spend, random_state=42, n_init=10)
+labels_spend = kmeans_spend.fit_predict(X_spend_scaled)
+
+print("\nKMeans (Spending Score only) evaluation:")
+eval_spend = evaluate_clusters(X_spend_scaled, labels_spend, name=f"KMeans_k={k_spend}_spend")
+
+# Visualize 1D clusters
+plt.figure(figsize=(10,4))
+palette = sns.color_palette("Set2", k_spend)
+for i in range(k_spend):
+    pts = X_spend[labels_spend == i]
+    plt.scatter(pts, np.zeros_like(pts) + i, s=50, label=f"Cluster {i}", color=palette[i])
+plt.yticks([])
+plt.xlabel("Spending Score")
+plt.title("KMeans Clusters on Spending Score")
+plt.legend()
+plt.show()
+
+# ------------------------------
+# Step 6: K-Means on Income + Spending Score (2D)
+# ------------------------------
+# Use elbow to find k
+inertia2 = []
+sil2 = []
+K2 = range(2,10)
+for k in K2:
+    km = KMeans(n_clusters=k, random_state=42, n_init=10)
+    labs = km.fit_predict(X_income_spend_scaled)
+    inertia2.append(km.inertia_)
+    sil2.append(silhouette_score(X_income_spend_scaled, labs))
+
+plt.figure(figsize=(12,4))
+plt.subplot(1,2,1)
+plt.plot(list(K2), inertia2, 'o-')
+plt.xlabel('k')
+plt.ylabel('Inertia')
+plt.title('Elbow (Income+Spending)')
+
+plt.subplot(1,2,2)
+plt.plot(list(K2), sil2, 'o-')
+plt.xlabel('k')
+plt.ylabel('Silhouette')
+plt.title('Silhouette (Income+Spending)')
+plt.tight_layout()
+plt.show()
+
+# Pick k_income_spend: often 3-5; choose k=5 by convention for mall dataset
+k_income_spend = 5
+kmeans_is = KMeans(n_clusters=k_income_spend, random_state=42, n_init=10)
+labels_is = kmeans_is.fit_predict(X_income_spend_scaled)
+
+print("\nKMeans (Income + Spending) evaluation:")
+eval_is = evaluate_clusters(X_income_spend_scaled, labels_is, name=f"KMeans_k={k_income_spend}_income_spend")
+
+# Visualize clusters in 2D
+plt.figure(figsize=(8,6))
+sns.scatterplot(x=X_income_spend[:,0], y=X_income_spend[:,1], hue=labels_is, palette='tab10', s=60, legend='full')
+plt.title(f"KMeans Clusters (k={k_income_spend}) on Annual Income vs Spending Score")
+plt.xlabel("Annual Income (k$)")
+plt.ylabel("Spending Score (1-100)")
+plt.legend(title="Cluster")
+plt.show()
+
+# Show cluster centers (unscale for readability)
+centers_scaled = kmeans_is.cluster_centers_
+centers = scaler_2d.inverse_transform(centers_scaled)
+centers_df = pd.DataFrame(centers, columns=features_2d)
+print("\nCluster centers (unscaled):")
+display(centers_df)
+
+# ------------------------------
+# Step 7: Agglomerative Clustering (Hierarchical) on Spending Score
+# ------------------------------
+agg = AgglomerativeClustering(n_clusters=4, linkage='ward')
+labels_agg = agg.fit_predict(X_spend_scaled)
+
+print("\nAgglomerative (Spending Score) evaluation:")
+eval_agg = evaluate_clusters(X_spend_scaled, labels_agg, name="Agglomerative_k=4_spend")
+
+# Plot Agglomerative result (1D)
+plt.figure(figsize=(10,4))
+for i in np.unique(labels_agg):
+    pts = X_spend[labels_agg == i]
+    plt.scatter(pts, np.zeros_like(pts) + i, s=50, label=f"Cluster {i}")
+plt.yticks([])
+plt.xlabel("Spending Score")
+plt.title("Agglomerative Clusters on Spending Score")
+plt.legend()
+plt.show()
+
+# ------------------------------
+# Step 8: Cross-validation for KMeans (stability) - 5-fold CV on Income+Spending
+# We'll split dataset into 5 folds, fit KMeans on train, compute silhouette on validation fold, average results.
+# ------------------------------
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
+sil_cv = []
+k_for_cv = k_income_spend
+
+for train_index, val_index in kf.split(X_income_spend_scaled):
+    X_tr, X_val = X_income_spend_scaled[train_index], X_income_spend_scaled[val_index]
+    km = KMeans(n_clusters=k_for_cv, random_state=42, n_init=10)
+    km.fit(X_tr)
+    val_labels = km.predict(X_val)
+    s = silhouette_score(X_val, val_labels)
+    sil_cv.append(s)
+
+print(f"\n5-Fold CV Silhouette scores for KMeans (k={k_for_cv}):", np.round(sil_cv,4))
+print("Average CV Silhouette:", np.round(np.mean(sil_cv),4))
+
+# ------------------------------
+# Step 9: Identify 'profitable' cluster(s)
+# Strategy: profitable = clusters with high Annual Income AND high Spending Score
+# We will compute mean income & spending per cluster and choose cluster(s) above median.
+# ------------------------------
+df_clusters = df.copy()
+df_clusters['Cluster_IS'] = labels_is
+
+summary = df_clusters.groupby('Cluster_IS')[['Annual Income (k$)', 'Spending Score (1-100)']].mean().reset_index()
+summary = summary.rename(columns={'Annual Income (k$)': 'mean_income', 'Spending Score (1-100)': 'mean_spend'})
+summary['income_rank'] = summary['mean_income'].rank(method='min', ascending=False)
+summary['spend_rank'] = summary['mean_spend'].rank(method='min', ascending=False)
+summary['combined_rank'] = summary['income_rank'] + summary['spend_rank']
+summary = summary.sort_values('combined_rank')
+print("\nCluster summary (mean income & spending):")
+display(summary)
+
+# Choose top cluster(s) with lowest combined_rank as 'profitable'
+profitable_clusters = summary['Cluster_IS'].iloc[:1].tolist()  # top 1 cluster
+print("Profitable cluster(s):", profitable_clusters)
+
+# Show sample customers from profitable cluster
+profitable_customers = df_clusters[df_clusters['Cluster_IS'].isin(profitable_clusters)].sort_values(['Annual Income (k$)','Spending Score (1-100)'], ascending=False)
+print("\nTop 10 customers from profitable cluster:")
+display(profitable_customers.head(10))
+
+# ------------------------------
+# Step 10: Final Visual: highlight profitable cluster on Income vs Spending plot
+# ------------------------------
+plt.figure(figsize=(8,6))
+palette_all = ['lightgray' if c not in profitable_clusters else 'red' for c in labels_is]
+plt.scatter(X_income_spend[:,0], X_income_spend[:,1], c=palette_all, s=60, alpha=0.9)
+for i, row in centers_df.iterrows():
+    plt.scatter(row[features_2d[0]], row[features_2d[1]], marker='X', s=200, edgecolor='black')
+plt.title("Income vs Spending - Profitable Cluster Highlighted (red)")
+plt.xlabel("Annual Income (k$)")
+plt.ylabel("Spending Score (1-100)")
+plt.show()
+
+# ------------------------------
+# Summary of evaluations
+# ------------------------------
+print("\n--- Summary of cluster evaluations ---")
+print("KMeans (spending only):", eval_spend)
+print("Agglomerative (spending):", eval_agg)
+print("KMeans (income+spending):", eval_is)
+print(f"Cross-validated avg silhouette (KMeans k={k_for_cv}): {np.mean(sil_cv):.4f}")
+
+# ------------------------------
+# End of pipeline
+# ------------------------------
+print("\nDone. You can tweak k values (k_spend, k_income_spend) and re-run to refine clusters.")
+
