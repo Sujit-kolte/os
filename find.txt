@@ -1,0 +1,45 @@
+// 1. Show all documents
+db.students.find()
+
+// 2. Find one document
+db.students.findOne()
+
+// 3. Find students with course "IT"
+db.students.find({ course: "IT" })
+
+// 4. Find students with age > 21
+db.students.find({ age: { $gt: 21 } })
+
+// 5. Find students with age between 20 and 22
+db.students.find({ age: { $gte: 20, $lte: 22 } })
+
+// 6. Find specific fields only
+db.students.find({}, { name: 1, course: 1, _id: 0 })
+
+// 7. Sort students by age ascending
+db.students.find().sort({ age: 1 })
+
+// 8. Limit results to 2
+db.students.find().limit(2)
+
+// 9. Count total students
+db.students.countDocuments()
+
+// 10. Find distinct course names
+db.students.distinct("course")
+-------------------------------------------------------------------------
+// 1. Find students with age 21 OR course "AI"
+db.students.find({ $or: [ { age: 21 }, { course: "AI" } ] })
+
+// 2. Find students NOT enrolled in "IT"
+db.students.find({ course: { $ne: "IT" } })
+
+// 3. Find students age ≥ 21 AND course = "IT"
+db.students.find({ $and: [ { age: { $gte: 21 } }, { course: "IT" } ] })
+
+// 4. Find students whose age is NOT greater than 22
+db.students.find({ age: { $not: { $gt: 22 } } })
+
+// 5. Conditional semantic example
+db.students.find({ age: { $in: [20, 21] } })
+
